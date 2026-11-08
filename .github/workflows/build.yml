@@ -16,11 +16,13 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install Capacitor & Build App
+      - name: Prepare App & Capacitor Config
         run: |
+          mkdir -p www
+          mv index.html www/
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init KMESSENGER com.komessenger.app --web-dir .
+          echo '{"appId": "com.komessenger.app", "appName": "KOMESSENGER", "webDir": "www"}' > capacitor.config.json
           npx cap add android
           npx cap sync android
 
