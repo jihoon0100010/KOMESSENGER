@@ -26,13 +26,17 @@ jobs:
         run: |
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          
-          # 웹 에셋 폴더 생성 및 index.html 위치 보장
-          mkdir -p android/app/src/main/assets/public
-          if [ -f "index.html" ]; then cp index.html android/app/src/main/assets/public/; fi
-          
-          # 설정 파일 생성
-          echo '{"appId": "com.komessenger.app", "appName": "KOMESSENGER", "webDir": "android/app/src/main/assets/public"}' > capacitor.config.json
+
+          # 웹 파일 폴더 준비
+          mkdir -p www
+          cp index.html www/
+
+          # Capacitor 설정 파일 생성
+          echo '{"appId": "com.komessenger.app", "appName": "KOMESSENGER", "webDir": "www"}' > capacitor.config.json
+
+          # 안드로이드 프로젝트 생성
+          npx cap add android
+          npx cap sync android
 
           cd android
           chmod +x gradlew
@@ -41,5 +45,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KMESSENGER-APK
+          name: KOMESSENGER-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
