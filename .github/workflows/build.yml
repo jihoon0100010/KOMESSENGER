@@ -22,17 +22,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build Capacitor Android & APK
+      - name: Direct Android Web Build
         run: |
-          mkdir -p www
-          if [ -f "index.html" ]; then cp index.html www/; fi
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init KOMESSENGER com.komessenger.app --web-dir www
+          npx cap init KOMESSENGER com.komessenger.app --web-dir .
           npx cap add android
+          
+          # Gradle 캐시 디렉토리 및 충돌 유발 파일 강제 삭제 후 빌드 실행
           cd android
+          rm -rf .gradle build app/build
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --refresh-dependencies
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
