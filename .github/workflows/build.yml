@@ -32,12 +32,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Clear Gradle Cache & Build APK
+      - name: Fix Gradle Wrapper & Build APK
         run: |
           cd android
-          rm -rf ~/.gradle/caches/
+          # Gradle 버전을 충돌 없는 안정적인 버전(8.0)으로 강제 고정
+          ./gradlew wrapper --gradle-version 8.0
           chmod +x gradlew
-          ./gradlew assembleDebug --refresh-dependencies --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
