@@ -16,31 +16,20 @@ jobs:
         with:
           node-version: 18
 
-      - name: Build Web App Bundle
-        run: |
-          mkdir -p www
-          # index.html이 이미 루트에 있다면 www 폴더로 이동, 없으면 현재 상태 유지
-          if [ -f "index.html" ]; then cp index.html www/; fi
-          npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init KOMESSENGER com.komessenger.app --web-dir www
-          npx cap add android
-
-      - name: Fix Android Manifest & Gradle Config
-        run: |
-          cd android
-          # 빌드 에러를 유발하는 캐시 디렉토리 원천 삭제
-          rm -rf .gradle build app/build
-          sed -i 's/distributionUrl=.*\\/distributionUrl\\=https\\:\\/\\/services.gradle.org\\/distributions\\/gradle-8.0-bin.zip/g' gradle/wrapper/gradle-wrapper.properties
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Final APK Compilation
+      - name: Build Capacitor Android & APK
         run: |
+          mkdir -p www
+          if [ -f "index.html" ]; then cp index.html www/; fi
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init KOMESSENGER com.komessenger.app --web-dir www
+          npx cap add android
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
