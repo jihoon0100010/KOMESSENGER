@@ -1,40 +1,408 @@
-name: Build APK
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KOMESSENGER</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --card-bg: #1e1e1e;
+      --border-color: #333333;
+      --text-main: #ffffff;
+      --text-sub: #888888;
+      --accent-yellow: #ffe600;
+      --accent-yellow-text: #000000;
+      --bubble-me: #2a2a2a;
+      --bubble-other: #1e1e1e;
+    }
 
-on:
-  push:
-    branches: [ "main" ]
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background-color: var(--bg-color); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    header { height: 60px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background-color: var(--bg-color); z-index: 10; }
+    .logo { font-weight: 900; font-size: 1.2rem; letter-spacing: 2px; }
+    .user-info { font-size: 0.85rem; color: var(--text-sub); display: flex; align-items: center; gap: 8px; }
+    .user-info input { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; width: 100px; }
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+    #pinned-bar { display: none; background-color: var(--card-bg); border-bottom: 1px solid var(--border-color); padding: 8px 16px; font-size: 0.85rem; justify-content: space-between; align-items: center; color: var(--text-sub); }
+    #pinned-bar span.pin-icon { color: var(--accent-yellow); margin-right: 6px; }
+    #pinned-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%; color: var(--text-main); }
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+    #chat-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .msg-wrapper { display: flex; flex-direction: column; max-width: 80%; }
+    .msg-wrapper.me { align-self: flex-end; align-items: flex-end; }
+    .msg-wrapper.other { align-self: flex-start; align-items: flex-start; }
 
-      - name: Build Clean Capacitor APK
-        run: |
-          npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init KOMESSENGER com.komessenger.app --web-dir .
-          npx cap add android
-          # 빌드 전 의존성 및 설정 파일 강제 정돈
-          cd android
-          ./gradlew clean --no-daemon
-          ./gradlew assembleDebug --no-daemon
+    .msg-sender { font-size: 0.75rem; color: var(--text-sub); margin-bottom: 4px; }
+    .reply-preview { font-size: 0.75rem; background: rgba(255,255,255,0.05); border-left: 2px solid var(--text-sub); padding: 4px 8px; margin-bottom: 4px; border-radius: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: KMESSENGER-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+    .msg-bubble { padding: 10px 14px; border-radius: 12px; background-color: var(--bubble-other); border: 1px solid var(--border-color); font-size: 0.95rem; line-height: 1.4; word-break: break-word; position: relative; }
+    .msg-wrapper.me .msg-bubble { background-color: var(--bubble-me); border-color: #444; }
+
+    .mention-all { background-color: var(--accent-yellow); color: var(--accent-yellow-text); font-weight: bold; padding: 2px 6px; border-radius: 4px; }
+
+    .chat-img { max-width: 200px; max-height: 200px; border-radius: 8px; margin-top: 6px; display: block; }
+    .chat-audio { margin-top: 6px; max-width: 220px; }
+
+    .msg-footer { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 0.75rem; color: var(--text-sub); }
+    .reactions { display: flex; gap: 4px; }
+    .reaction-badge { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 2px 6px; cursor: pointer; font-size: 0.75rem; }
+    .msg-actions { opacity: 0.7; cursor: pointer; gap: 10px; display: flex; }
+    .msg-actions span:hover { color: var(--text-main); }
+
+    #reply-target-bar { display: none; background-color: var(--card-bg); border-top: 1px solid var(--border-color); padding: 6px 16px; font-size: 0.8rem; justify-content: space-between; align-items: center; }
+    #reply-target-bar button { background: none; border: none; color: var(--text-sub); font-size: 1rem; cursor: pointer; }
+
+    footer { border-top: 1px solid var(--border-color); padding: 8px 12px; background-color: var(--bg-color); display: flex; flex-direction: column; gap: 8px; }
+    .input-row { display: flex; align-items: center; gap: 8px; }
+    .icon-btn { background: none; border: none; color: var(--text-sub); font-size: 1.3rem; cursor: pointer; padding: 4px; }
+    .icon-btn:hover, .icon-btn.active { color: var(--text-main); }
+
+    #message-input { flex: 1; min-width: 0; background-color: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px 14px; border-radius: 20px; font-size: 0.95rem; outline: none; }
+    #send-btn { background-color: var(--text-main); color: var(--bg-color); border: none; padding: 8px 16px; border-radius: 18px; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+
+    #file-input { display: none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">KOMESSENGER</div>
+    <div class="user-info">
+      <span>닉네임:</span>
+      <input type="text" id="username-input" value="User" maxlength="12">
+    </div>
+  </header>
+
+  <div id="pinned-bar">
+    <div><span class="pin-icon">📌</span><span id="pinned-text">고정된 메시지가 없습니다.</span></div>
+    <span style="cursor:pointer;" id="unpin-btn">✕</span>
+  </div>
+
+  <div id="chat-body"></div>
+
+  <div id="reply-target-bar">
+    <span id="reply-target-text">답장 대상 메시지...</span>
+    <button id="cancel-reply-btn">✕</button>
+  </div>
+
+  <footer>
+    <div class="input-row">
+      <button class="icon-btn" id="attach-btn">📎</button>
+      <button class="icon-btn" id="record-btn">🎙️</button>
+      <input type="file" id="file-input" accept="image/*,audio/*">
+      <input type="text" id="message-input" placeholder="메시지 입력... (@all로 모두 언급)">
+      <button id="send-btn">전송</button>
+    </div>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+  <script>
+    // -------------------------------------------------------------
+    // 1. Firebase 설정
+    // -------------------------------------------------------------
+    const firebaseConfig = {
+      apiKey: "AIzaSyBhb8P-oHT7g_6oywGndFFiUcH6DqyCe1A",
+      authDomain: "komessenger-789a8.firebaseapp.com",
+      databaseURL: "https://komessenger-789a8-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "komessenger-789a8",
+      storageBucket: "komessenger-789a8.firebasestorage.app",
+      messagingSenderId: "737654823531",
+      appId: "1:737654823531:web:6a92840cc3920d0739af2e"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const messagesRef = db.ref("messages");
+    const pinnedRef = db.ref("pinnedMessage");
+
+    // 상태 변수
+    let currentReplyTo = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let lastMessages = [];
+
+    const chatBody = document.getElementById("chat-body");
+    const usernameInput = document.getElementById("username-input");
+    const messageInput = document.getElementById("message-input");
+    const fileInput = document.getElementById("file-input");
+
+    // 닉네임 (한 번 정하면 기억)
+    let savedName = null;
+    try { savedName = localStorage.getItem("komessenger_name"); } catch (e) {}
+    usernameInput.value = savedName || ("User_" + Math.floor(Math.random() * 1000));
+    usernameInput.addEventListener("change", () => {
+      try { localStorage.setItem("komessenger_name", usernameInput.value.trim()); } catch (e) {}
+      renderAll();
+    });
+
+    // -------------------------------------------------------------
+    // 2. 실시간 데이터 수신 (최근 100개만)
+    // -------------------------------------------------------------
+    messagesRef.limitToLast(100).on("value", (snapshot) => {
+      const arr = [];
+      snapshot.forEach((child) => {
+        arr.push({ id: child.key, msg: child.val() });
+      });
+      lastMessages = arr;
+      renderAll();
+    });
+
+    pinnedRef.on("value", (snapshot) => {
+      const pinnedBar = document.getElementById("pinned-bar");
+      const pinnedText = document.getElementById("pinned-text");
+      const text = snapshot.val();
+      if (text) {
+        pinnedText.textContent = text;
+        pinnedBar.style.display = "flex";
+      } else {
+        pinnedBar.style.display = "none";
+      }
+    });
+
+    // -------------------------------------------------------------
+    // 3. 메시지 렌더링 (innerHTML 없이 안전하게)
+    // -------------------------------------------------------------
+    function renderAll() {
+      chatBody.innerHTML = "";
+      lastMessages.forEach((item) => renderMessage(item.id, item.msg));
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    function buildText(text) {
+      const span = document.createElement("span");
+      text.split(/(@all|@everyone)/gi).forEach((part) => {
+        if (!part) return;
+        if (/^(@all|@everyone)$/i.test(part)) {
+          const m = document.createElement("span");
+          m.className = "mention-all";
+          m.textContent = part;
+          span.appendChild(m);
+        } else {
+          span.appendChild(document.createTextNode(part));
+        }
+      });
+      return span;
+    }
+
+    function makeAction(label, handler) {
+      const s = document.createElement("span");
+      s.textContent = label;
+      s.addEventListener("click", handler);
+      return s;
+    }
+
+    function renderMessage(id, msg) {
+      const myName = usernameInput.value.trim();
+      const isMe = msg.sender === myName;
+      const previewText = msg.text || "첨부파일";
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "msg-wrapper " + (isMe ? "me" : "other");
+
+      const senderDiv = document.createElement("div");
+      senderDiv.className = "msg-sender";
+      senderDiv.textContent = msg.sender;
+      wrapper.appendChild(senderDiv);
+
+      if (msg.replyTo) {
+        const replyDiv = document.createElement("div");
+        replyDiv.className = "reply-preview";
+        replyDiv.textContent = "↩ " + msg.replyTo.sender + ": " + (msg.replyTo.text || "첨부파일");
+        wrapper.appendChild(replyDiv);
+      }
+
+      const bubble = document.createElement("div");
+      bubble.className = "msg-bubble";
+
+      if (msg.text) {
+        bubble.appendChild(buildText(msg.text));
+      }
+
+      if (msg.file && typeof msg.file.data === "string") {
+        if (msg.file.data.startsWith("data:image/")) {
+          const img = document.createElement("img");
+          img.src = msg.file.data;
+          img.className = "chat-img";
+          bubble.appendChild(img);
+        } else if (msg.file.data.startsWith("data:audio/")) {
+          const audio = document.createElement("audio");
+          audio.src = msg.file.data;
+          audio.controls = true;
+          audio.className = "chat-audio";
+          bubble.appendChild(audio);
+        }
+      }
+
+      wrapper.appendChild(bubble);
+
+      const footer = document.createElement("div");
+      footer.className = "msg-footer";
+
+      const reactionsDiv = document.createElement("div");
+      reactionsDiv.className = "reactions";
+      ["👍", "❤️"].forEach((emoji) => {
+        const count = msg.reactions ? (msg.reactions[emoji] || 0) : 0;
+        if (count > 0) {
+          const badge = document.createElement("span");
+          badge.className = "reaction-badge";
+          badge.textContent = emoji + " " + count;
+          badge.addEventListener("click", () => addReaction(id, emoji));
+          reactionsDiv.appendChild(badge);
+        }
+      });
+      footer.appendChild(reactionsDiv);
+
+      const actionsDiv = document.createElement("div");
+      actionsDiv.className = "msg-actions";
+      actionsDiv.appendChild(makeAction("답장", () => setReplyTarget(msg.sender, previewText)));
+      actionsDiv.appendChild(makeAction("👍", () => addReaction(id, "👍")));
+      actionsDiv.appendChild(makeAction("❤️", () => addReaction(id, "❤️")));
+      actionsDiv.appendChild(makeAction("📌", () => pinMessage(previewText)));
+      footer.appendChild(actionsDiv);
+
+      wrapper.appendChild(footer);
+      chatBody.appendChild(wrapper);
+    }
+
+    // -------------------------------------------------------------
+    // 4. 메시지 전송 및 이벤트 처리
+    // -------------------------------------------------------------
+    function sendMessage(fileData) {
+      const text = messageInput.value.trim();
+      const sender = usernameInput.value.trim() || "User";
+
+      if (!text && !fileData) return;
+
+      const payload = {
+        sender: sender,
+        text: text,
+        timestamp: Date.now()
+      };
+
+      if (currentReplyTo) payload.replyTo = currentReplyTo;
+      if (fileData) payload.file = fileData;
+
+      messagesRef.push(payload);
+
+      messageInput.value = "";
+      cancelReply();
+    }
+
+    function addReaction(msgId, type) {
+      db.ref("messages/" + msgId + "/reactions/" + type)
+        .transaction((count) => (count || 0) + 1);
+    }
+
+    function pinMessage(text) { pinnedRef.set(text); }
+    function unpinMessage() { pinnedRef.remove(); }
+
+    function setReplyTarget(sender, text) {
+      const short = text.length > 40 ? text.slice(0, 40) + "…" : text;
+      currentReplyTo = { sender: sender, text: short };
+      document.getElementById("reply-target-text").textContent = "답장 대상: " + sender + " - " + short;
+      document.getElementById("reply-target-bar").style.display = "flex";
+      messageInput.focus();
+    }
+
+    function cancelReply() {
+      currentReplyTo = null;
+      document.getElementById("reply-target-bar").style.display = "none";
+    }
+
+    // -------------------------------------------------------------
+    // 5. 파일 및 음성 처리
+    // -------------------------------------------------------------
+    // 사진은 작게 줄여서 보내요 (데이터베이스가 무거워지는 걸 막아줘요)
+    function resizeImage(file, maxSize, quality) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL("image/jpeg", quality));
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      event.target.value = "";
+      if (!file) return;
+
+      if (file.type.startsWith("image/")) {
+        resizeImage(file, 800, 0.7)
+          .then((dataUrl) => sendMessage({ name: file.name, type: "image/jpeg", data: dataUrl }))
+          .catch(() => alert("이미지를 불러오지 못했어요."));
+      } else if (file.type.startsWith("audio/")) {
+        if (file.size > 1.5 * 1024 * 1024) {
+          alert("음성 파일이 너무 커요. (최대 약 1.5MB)");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => sendMessage({ name: file.name, type: file.type, data: e.target.result });
+        reader.readAsDataURL(file);
+      }
+    }
+
+    async function toggleRecording() {
+      const btn = document.getElementById("record-btn");
+      if (!isRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+
+          mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+          mediaRecorder.onstop = () => {
+            stream.getTracks().forEach((t) => t.stop());
+            const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              sendMessage({ name: "voice_message.webm", type: "audio/webm", data: e.target.result });
+            };
+            reader.readAsDataURL(audioBlob);
+          };
+
+          mediaRecorder.start();
+          isRecording = true;
+          btn.classList.add("active");
+        } catch (err) {
+          alert("마이크 접근 권한이 필요합니다.");
+        }
+      } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        btn.classList.remove("active");
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 6. 버튼 연결
+    // -------------------------------------------------------------
+    document.getElementById("send-btn").addEventListener("click", () => sendMessage());
+    messageInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+    document.getElementById("attach-btn").addEventListener("click", () => fileInput.click());
+    document.getElementById("record-btn").addEventListener("click", toggleRecording);
+    document.getElementById("unpin-btn").addEventListener("click", unpinMessage);
+    document.getElementById("cancel-reply-btn").addEventListener("click", cancelReply);
+    fileInput.addEventListener("change", handleFileSelect);
+  </script>
+</body>
+</html>
