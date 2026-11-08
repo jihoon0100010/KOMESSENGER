@@ -16,15 +16,22 @@ jobs:
         with:
           node-version: 18
 
-      - name: Prepare App & Capacitor Config
+      - name: Build Web App Bundle
         run: |
           mkdir -p www
-          mv index.html www/
+          # index.html이 이미 루트에 있다면 www 폴더로 이동, 없으면 현재 상태 유지
+          if [ -f "index.html" ]; then cp index.html www/; fi
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          echo '{"appId": "com.komessenger.app", "appName": "KOMESSENGER", "webDir": "www"}' > capacitor.config.json
+          npx cap init KOMESSENGER com.komessenger.app --web-dir www
           npx cap add android
-          npx cap sync android
+
+      - name: Fix Android Manifest & Gradle Config
+        run: |
+          cd android
+          # 빌드 에러를 유발하는 캐시 디렉토리 원천 삭제
+          rm -rf .gradle build app/build
+          sed -i 's/distributionUrl=.*\\/distributionUrl\\=https\\:\\/\\/services.gradle.org\\/distributions\\/gradle-8.0-bin.zip/g' gradle/wrapper/gradle-wrapper.properties
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -32,12 +39,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Clear Gradle Cache & Build APK
+      - name: Final APK Compilation
         run: |
           cd android
-          rm -rf ~/.gradle/caches/
           chmod +x gradlew
-          ./gradlew assembleDebug --refresh-dependencies --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
